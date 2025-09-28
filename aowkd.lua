@@ -1,67 +1,26 @@
 local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local RunService = game:GetService("RunService")
+local player = game:GetService("Players").LocalPlayer
+local mainGui = player.PlayerGui:WaitForChild("Main", 10)
 
--- Ganti dengan URL raw GitHub Anda
-local SCRIPT_URL = "https://raw.githubusercontent.com/username/repo/main/script.lua"
+-- Gear Setup
+local gearShop = mainGui:WaitForChild("Gears", 10)
+local gearFrame = gearShop:WaitForChild("Frame", 10):WaitForChild("ScrollingFrame", 10)
 
--- Daftarkan queue_on_teleport untuk teleport dalam game
-if queue_on_teleport then
-    queue_on_teleport([[
-        loadstring(game:HttpGet("]] .. SCRIPT_URL .. [["))()
-    ]])
-    print("queue_on_teleport diatur untuk memuat ulang script dari " .. SCRIPT_URL)
-else
-    warn("queue_on_teleport tidak tersedia, pastikan executor mendukungnya!")
+-- Seed Setup
+local seedShop = mainGui:WaitForChild("Seeds", 10)
+local seedFrame = seedShop:WaitForChild("Frame", 10):WaitForChild("ScrollingFrame", 10)
+
+local webhookUrl = "https://discord.com/api/webhooks/1380214167889379378/vzIRr2W4_ug9Zs1Lj89a81XayIj3FwLzJko0OSBZInmfT3ymjp__poAQomL5DaZdCiti"
+
+-- Check if UI elements are found
+if not gearFrame then warn("gearFrame tidak ditemukan!") end
+if not seedFrame then warn("seedFrame tidak ditemukan!") end
+if not gearFrame or not seedFrame then
+    warn("Gagal menemukan elemen UI. Periksa struktur!")
+    return
 end
 
--- Fungsi untuk menunggu GUI dengan retry
-local function waitForGui(parent, childName, timeout, retries, delay)
-    local attempts = 0
-    while attempts < retries do
-        local success, result = pcall(function()
-            return parent:WaitForChild(childName, timeout)
-        end)
-        if success and result then
-            return result
-        end
-        warn("Gagal menemukan " .. childName .. " di " .. tostring(parent) .. ", retry (" .. (attempts + 1) .. "/" .. retries .. ")")
-        attempts = attempts + 1
-        task.wait(delay)
-    end
-    return nil
-end
-
--- Inisialisasi GUI dengan retry
-local function initializeGui()
-    local mainGui = waitForGui(player.PlayerGui, "Main", 10, 5, 2)
-    if not mainGui then
-        warn("Gagal menemukan MainGui setelah retry!")
-        return nil, nil, nil
-    end
-
-    local gearShop = waitForGui(mainGui, "Gears", 10, 5, 2)
-    local seedShop = waitForGui(mainGui, "Seeds", 10, 5, 2)
-    if not gearShop or not seedShop then
-        warn("Gagal menemukan GearShop atau SeedShop!")
-        return nil, nil, nil
-    end
-
-    local gearFrame = waitForGui(gearShop, "Frame", 10, 5, 2)
-    gearFrame = gearFrame and waitForGui(gearFrame, "ScrollingFrame", 10, 5, 2)
-    local seedFrame = waitForGui(seedShop, "Frame", 10, 5, 2)
-    seedFrame = seedFrame and waitForGui(seedFrame, "ScrollingFrame", 10, 5, 2)
-
-    if not gearFrame or not seedFrame then
-        warn("Gagal menemukan gearFrame atau seedFrame!")
-        return nil, nil, nil
-    end
-
-    return mainGui, gearFrame, seedFrame
-end
-
--- Gear dan Seed Names dengan Emojis
+-- Gear and Seed Names with Emojis
 local gearNames = {
     "Water Bucket", "Frost Grenade", "Banana Gun", "Frost Blower", "Carrot Launcher"
 }
@@ -80,57 +39,55 @@ local emojiMap = {
     ["Mr Carrot Seed"] = "🥕", ["Tomatrio Seed"] = "🍅"
 }
 
-local webhookUrl = "https://discord.com/api/webhooks/1380214167889379378/vzIRr2W4_ug9Zs1Lj89a81XayIj3FwLzJko0OSBZInmfT3ymjp__poAQomL5DaZdCiti"
+-- Shared Variables
 local maxRetryAttempts = 5
-local retryDelay = 1.5
+local retryDelay = 1.5  -- Delay 1.5 detik untuk beri waktu UI sinkron
 
--- Cache Frames dan Debug Listeners
-local function initializeFrames(gearFrame, seedFrame)
-    local gearFrames = {}
-    local seedFrames = {}
+-- Cache Frames and Add Debug Listeners
+local gearFrames = {}
+local seedFrames = {}
 
-    for _, gearName in ipairs(gearNames) do
-        local gearPath = gearFrame:FindFirstChild(gearName)
-        if gearPath and gearPath:IsA("Frame") then
-            local stockLabel = gearPath:FindFirstChild("Stock")
-            if stockLabel and stockLabel:IsA("TextLabel") then
-                gearFrames[gearName] = stockLabel
-                stockLabel:GetPropertyChangedSignal("Text"):Connect(function()
-                    warn("Gear stock changed for " .. gearName .. ": " .. stockLabel.Text .. " at " .. os.time())
-                end)
-            else
-                warn("Stock label tidak ditemukan untuk gear: " .. gearName)
-            end
+for _, gearName in ipairs(gearNames) do
+    local gearPath = gearFrame:FindFirstChild(gearName)
+    if gearPath and gearPath:IsA("Frame") then
+        local stockLabel = gearPath:FindFirstChild("Stock")
+        if stockLabel and stockLabel:IsA("TextLabel") then
+            gearFrames[gearName] = stockLabel
+            -- Debug: Log perubahan stok
+            stockLabel:GetPropertyChangedSignal("Text"):Connect(function()
+                warn("Gear stock changed for " .. gearName .. ": " .. stockLabel.Text .. " at " .. os.time())
+            end)
         else
-            warn("Gear tidak ditemukan: " .. gearName)
+            warn("Stock label tidak ditemukan untuk gear: " .. gearName)
         end
+    else
+        warn("Gear tidak ditemukan: " .. gearName)
     end
+end
 
-    for _, seedName in ipairs(seedNames) do
-        local seedPath = seedFrame:FindFirstChild(seedName)
-        if seedPath and seedPath:IsA("Frame") then
-            local stockLabel = seedPath:FindFirstChild("Stock")
-            if stockLabel and stockLabel:IsA("TextLabel") then
-                seedFrames[seedName] = stockLabel
-                stockLabel:GetPropertyChangedSignal("Text"):Connect(function()
-                    warn("Seed stock changed for " .. seedName .. ": " .. stockLabel.Text .. " at " .. os.time())
-                end)
-            else
-                warn("Stock label tidak ditemukan untuk seed: " .. seedName)
-            end
+for _, seedName in ipairs(seedNames) do
+    local seedPath = seedFrame:FindFirstChild(seedName)
+    if seedPath and seedPath:IsA("Frame") then
+        local stockLabel = seedPath:FindFirstChild("Stock")
+        if stockLabel and stockLabel:IsA("TextLabel") then
+            seedFrames[seedName] = stockLabel
+            -- Debug: Log perubahan stok
+            stockLabel:GetPropertyChangedSignal("Text"):Connect(function()
+                warn("Seed stock changed for " .. seedName .. ": " .. stockLabel.Text .. " at " .. os.time())
+            end)
         else
-            warn("Seed tidak ditemukan: " .. seedName)
+            warn("Stock label tidak ditemukan untuk seed: " .. seedName)
         end
+    else
+        warn("Seed tidak ditemukan: " .. seedName)
     end
-
-    return gearFrames, seedFrames
 end
 
 local function getStock(stockLabel)
     local text = stockLabel.Text
-    warn("Stock text for " .. stockLabel.Parent.Name .. ": " .. text .. " at " .. os.time())
+    warn("Stock text for " .. stockLabel.Parent.Name .. ": " .. text .. " at " .. os.time()) -- Debug text mentah
     local stockText = text:match("x(%d+) in stock")
-    return stockText and tonumber(stockText) or 0
+    return stockText and tonumber(stockText) or 0 -- Kembalikan 0 untuk text invalid
 end
 
 local function extractItems(itemFrames, itemType)
@@ -155,7 +112,7 @@ end
 
 local function sendEmbed(lines, title)
     if #lines == 0 then return false end
-    task.wait(0.5)
+    task.wait(0.5) -- Penundaan untuk menghindari rate limit
     local payload = HttpService:JSONEncode({
         embeds = {{
             title = title,
@@ -169,9 +126,9 @@ local function sendEmbed(lines, title)
         }}
     })
     local success, result
-    for i = 1, 3 do
+    for i = 1, 3 do -- Coba hingga 3 kali
         success, result = pcall(function()
-            return HttpService:RequestAsync({
+            return request({
                 Url = webhookUrl,
                 Method = "POST",
                 Headers = {["Content-Type"] = "application/json"},
@@ -196,16 +153,19 @@ local function checkAndSendItems(itemFrames, itemNames, itemType, title)
     while attempts < maxRetryAttempts do
         items = extractItems(itemFrames, itemType)
         warn(itemType .. " stocks diambil (attempt " .. (attempts + 1) .. "): " .. HttpService:JSONEncode(items) .. " at " .. os.time())
+
+        -- Cek apakah stok stabil (sama dengan attempt sebelumnya)
         if lastItems and HttpService:JSONEncode(items) == HttpService:JSONEncode(lastItems) then
-            break
+            break -- Stok stabil, lanjut kirim
         end
         lastItems = items
         attempts = attempts + 1
         if attempts < maxRetryAttempts then
-            task.wait(retryDelay)
+            task.wait(retryDelay) -- Tunggu 1.5 detik sebelum retry
         end
     end
 
+    -- Skip jika stok tidak stabil setelah max attempts
     if attempts >= maxRetryAttempts and lastItems and HttpService:JSONEncode(items) ~= HttpService:JSONEncode(lastItems) then
         warn("Stok tidak stabil untuk " .. itemType .. ", skip pengiriman")
         return
@@ -225,55 +185,30 @@ end
 
 local function scheduleWebhook(itemFrames, itemNames, itemType, title)
     while true do
+        -- Hitung waktu hingga detik ke-5 pada menit ke-0 berikutnya (setiap 5 menit, setelah restock)
         local currentTime = os.date("*t")
         local currentMinute = currentTime.min
         local currentSecond = currentTime.sec
         local minutesToNext = (5 - (currentMinute % 5)) % 5
-        local targetSecond = 2
+        local targetSecond = 2  -- Kirim pada detik 5 setelah restock
         local secondsToNext = (targetSecond - currentSecond) + (minutesToNext * 60)
         if secondsToNext <= 0 then
-            secondsToNext = secondsToNext + 300
+            secondsToNext = secondsToNext + 300  -- Tambah 5 menit jika sudah lewat
         end
-        warn("Menunggu " .. secondsToNext .. " detik untuk " .. itemType .. " hingga detik ke-2 menit ke-0 berikutnya")
+        warn("Menunggu " .. secondsToNext .. " detik untuk " .. itemType .. " hingga detik ke-5 menit ke-0 berikutnya")
         task.wait(secondsToNext)
 
+        -- Kirim webhook
         task.spawn(function()
             checkAndSendItems(itemFrames, itemNames, itemType, title)
         end)
     end
 end
 
--- Fungsi utama
-local function main()
-    while true do
-        local mainGui, gearFrame, seedFrame = initializeGui()
-        if mainGui and gearFrame and seedFrame then
-            local gearFrames, seedFrames = initializeFrames(gearFrame, seedFrame)
-            if next(gearFrames) or next(seedFrames) then
-                task.spawn(function()
-                    scheduleWebhook(gearFrames, gearNames, "Gear", "🛠️ DIKAGAMTENG • Gear Stocks")
-                end)
-                task.spawn(function()
-                    scheduleWebhook(seedFrames, seedNames, "Seed", "🌱 DIKAGAMTENG • Seed Stocks")
-                end)
-                while mainGui and mainGui.Parent and Players.LocalPlayer do
-                    task.wait(1)
-                end
-                warn("GUI hilang atau pemain disconnect, mencoba inisialisasi ulang...")
-            else
-                warn("Tidak ada frame yang ditemukan, mencoba ulang...")
-            end
-        end
-        task.wait(5)
-    end
-end
-
--- Pantau disconnect pemain
-Players.PlayerRemoving:Connect(function(p)
-    if p == player then
-        warn("Pemain disconnect, script akan dimuat ulang saat bergabung kembali melalui auto-execute atau queue_on_teleport...")
-    end
+-- Start scheduling for both gears and seeds
+task.spawn(function()
+    scheduleWebhook(gearFrames, gearNames, "Gear", "🛠️ DIKAGAMTENG • Gear Stocks")
 end)
-
--- Jalankan script utama
-task.spawn(main)
+task.spawn(function()
+    scheduleWebhook(seedFrames, seedNames, "Seed", "🌱 DIKAGAMTENG • Seed Stocks")
+end)
